@@ -1,36 +1,31 @@
-# Model Card: DeepGuard Multi-Task Detector
+# Model Card: DeepGuard
+
+## Model Summary
+
+DeepGuard는 딥페이크 영상의 Real/Fake 여부와 조작 기법을 동시에 예측하기 위한 멀티태스크 딥러닝 모델입니다.
 
 ## Intended Use
 
-DeepGuard is intended for education, research, and defensive deepfake analysis. It estimates whether an input face image/video is real or fake and provides a tentative manipulation-method prediction for fake samples.
+- 딥페이크 탐지 연구
+- 컴퓨터 비전 수업 프로젝트
+- 멀티태스크 학습 실험
+- 딥페이크 포렌식 모델 프로토타입
 
-## Not Intended For
+## Not Intended Use
 
-- Making final legal or forensic judgments without human review
-- Surveillance or identity-based decision-making
-- Generating or improving deepfake content
+- 무단 감시
+- 개인 식별
+- 사생활 침해
+- 허위 고발 또는 자동 판정 시스템
 
-## Inputs
+## Architecture
 
-- Face-centered image frames, preferably 224x224 RGB
-- Video files for frame extraction and aggregation inference
-
-## Outputs
-
-- Fake probability
-- Binary real/fake prediction
-- Manipulation-method probability distribution
-- Video-level aggregate decision
+- Backbone: ResNet34
+- Head 1: Binary classification head
+- Head 2: Method classification head
 
 ## Limitations
 
-- Method classification is exploratory and not production-grade
-- Performance can degrade under unseen compression, resolution, camera, or dataset conditions
-- The model may learn dataset artifacts rather than universal deepfake cues
-
-## Recommended Evaluation
-
-- Report Task 1 and Task 2 separately
-- Use fake-only macro F1 for method classification
-- Include confusion matrix analysis
-- Evaluate at both frame and video levels
+- 데이터셋 분포에 민감함
+- 조작 기법 분류는 추가 개선 필요
+- 실제 서비스 적용 전 외부 데이터셋 검증 필요

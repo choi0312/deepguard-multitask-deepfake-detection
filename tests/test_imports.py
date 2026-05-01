@@ -1,6 +1,6 @@
 def test_imports():
-    import src.data.dataset
-    import src.models.multitask
-    import src.training.losses
-    import src.evaluation.evaluate
-    import src.inference.predict_image
+    from src.models.multitask import DeepGuardMultiTask
+    from src.utils.config import load_config
+
+    assert DeepGuardMultiTask is not None
+    assert load_config is not None

@@ -8,42 +8,32 @@ data:
   val_csv: data/manifests/val.csv
   test_csv: data/manifests/test.csv
   image_size: 224
-  num_workers: 4
-  class_names_5cls: [Real, Deepfakes, FaceSwap, Face2Face, NeuralTextures]
-  method_names: [Deepfakes, FaceSwap, Face2Face, NeuralTextures]
+  num_workers: 2
 
 model:
-  type: multitask
   backbone: resnet34
   pretrained: true
-  dropout: 0.20
-  hidden_dim: 512
   num_methods: 4
-  freeze_backbone: false
+  dropout: 0.2
 
-train:
-  epochs: 8
+training:
+  epochs: 10
   batch_size: 32
-  lr: 0.0001
-  min_lr: 0.000001
+  learning_rate: 0.0001
   weight_decay: 0.0001
-  optimizer: adamw
-  scheduler: cosine
-  amp: true
-  grad_clip_norm: 1.0
-  log_interval: 20
-  selection_metric: composite
-  early_stopping_patience: 5
-
-loss:
-  lambda_method: 1.50
-  method_loss: focal_ce
-  focal_gamma: 1.5
-  label_smoothing: 0.05
-  use_pos_weight: true
-  use_method_class_weight: true
+  lambda_method: 1.0
+  gradient_clip_norm: 1.0
+  use_amp: true
+  patience: 5
 
 inference:
-  threshold: 0.50
-  max_frames: 32
-  frame_stride: 10
+  threshold: 0.5
+  frame_interval: 10
+
+classes:
+  real: Real
+  methods:
+    - Deepfakes
+    - FaceSwap
+    - Face2Face
+    - NeuralTextures

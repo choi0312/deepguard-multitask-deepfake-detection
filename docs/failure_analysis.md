@@ -1,51 +1,25 @@
-# Failure Analysis: Manipulation Method Classification
+# Failure Analysis: 조작 기법 분류 성능 한계 분석
 
-## Observation
+## 1. 관찰 결과
 
-The original DeepGuard experiment achieved strong binary real/fake detection, while method classification remained substantially harder.
+DeepGuard의 실험 결과 Real/Fake 탐지는 높은 수준의 성능을 보였으나, 조작 기법 분류(Task 2)는 상대적으로 낮은 성능을 보였습니다. 이는 단순 구현 오류라기보다, 데이터 특성과 멀티태스크 학습 구조에서 비롯된 문제로 해석할 수 있습니다.
 
-In portfolio language, this should be presented as:
+## 2. 원인 1: 조작 기법 간 시각적 유사성
 
-> DeepGuard achieved reliable real/fake detection and showed preliminary class-level signal for manipulation-method recognition. However, the method-classification task remains an open improvement target due to visual similarity between fake-generation methods and multi-task optimization interference.
+Deepfakes, FaceSwap, Face2Face, NeuralTextures는 모두 얼굴 영역을 중심으로 합성 흔적을 발생시킵니다. 따라서 저해상도 또는 압축된 프레임에서는 기법별 artifact가 명확히 분리되지 않을 수 있습니다.
 
-This is more accurate and professional than claiming that Task 2 is already fully solved.
+## 3. 원인 2: 멀티태스크 학습 간섭
 
----
+공유 백본은 Real/Fake 구분에 유리한 특징을 먼저 학습할 가능성이 높습니다. 이때 모든 fake 샘플에 공통적으로 나타나는 특징은 Task 1에는 유용하지만, fake 기법 간 차이를 구분하는 Task 2에는 충분하지 않을 수 있습니다.
 
-## Why Task 2 Is Hard
+## 4. 원인 3: Fake-only Loss 구조
 
-### 1. Visual Similarity Across Manipulation Methods
+Task 2의 손실은 fake 샘플에 대해서만 계산됩니다. 이로 인해 method head는 binary head에 비해 상대적으로 적은 학습 신호를 받게 되며, 전체 최적화 과정에서 Task 1이 더 큰 영향을 미칠 수 있습니다.
 
-Deepfakes, FaceSwap, Face2Face, and NeuralTextures all manipulate facial regions. At low resolution or under video compression, the method-specific artifacts become subtle.
+## 5. 향후 개선 방향
 
-### 2. Task Interference
-
-The shared backbone can learn features that are sufficient for real/fake detection but not discriminative enough for method-level recognition. In other words, the model may learn "fake artifact present" rather than "which manipulation mechanism produced this artifact."
-
-### 3. Fake-only Supervision
-
-Task 2 loss is computed only for fake samples. Real samples do not contribute to the method head, so the method-classification branch receives fewer effective updates than the binary head.
-
-### 4. Domain Mismatch
-
-ImageNet-pretrained backbones are optimized for object recognition, not subtle forensic artifacts. Fine-grained manipulation classification may require frequency-domain features or face-specific pretraining.
-
----
-
-## Improvements Added in This Refactor
-
-- Method loss weight increased through `lambda_method`
-- Focal-style cross entropy option for difficult fake samples
-- Method class weighting for imbalanced fake classes
-- Composite checkpoint selection using both Task 1 and Task 2 metrics
-- Modular codebase for easier follow-up experiments
-
----
-
-## Future Work
-
-1. Two-stage architecture: binary detector first, method classifier second
-2. Frequency branch: FFT/DCT features for artifact-sensitive representation
-3. Facial landmark branch: geometry-aware manipulation cues
-4. Task-specific mid-level branches to reduce interference
-5. Cross-dataset generalization experiments
+- 2-stage model: Real/Fake 탐지와 조작 기법 분류를 분리
+- Frequency-domain feature: FFT, DCT 기반 artifact 표현 추가
+- Facial landmark feature: 얼굴 기하학 정보를 보조 입력으로 활용
+- Task-specific branch: 공유 백본 이후 Task 2 전용 branch 추가
+- Multi-task optimization: uncertainty weighting 또는 gradient balancing 적용

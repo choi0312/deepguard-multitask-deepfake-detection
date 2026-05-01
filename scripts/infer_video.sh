@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
-CHECKPOINT=${1:-outputs/deepguard_resnet34_multitask/checkpoints/best.pt}
-VIDEO_PATH=${2:-samples/sample.mp4}
-
-python -m src.inference.predict_video \
+python -m src.inference.infer_video \
   --config configs/default.yaml \
-  --checkpoint "$CHECKPOINT" \
-  --video_path "$VIDEO_PATH"
+  --checkpoint outputs/deepguard_resnet34_multitask/checkpoints/best.pt \
+  --video_path samples/sample.mp4

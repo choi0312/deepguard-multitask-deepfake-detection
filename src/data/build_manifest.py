@@ -1,128 +1,151 @@
 from __future__ import annotations
 
 import argparse
+import json
+import random
 from pathlib import Path
 from typing import Dict, List
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
-from src.data.preprocess import iter_images
-from src.utils.seed import set_seed
 
-CLASS_TO_INFO: Dict[str, Dict[str, int]] = {
-    "Real": {"label_rf": 0, "label_method": -1},
-    "Deepfakes": {"label_rf": 1, "label_method": 0},
-    "FaceSwap": {"label_rf": 1, "label_method": 1},
-    "Face2Face": {"label_rf": 1, "label_method": 2},
-    "NeuralTextures": {"label_rf": 1, "label_method": 3},
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+METHOD_MAP: Dict[str, int] = {
+    "Deepfakes": 0,
+    "FaceSwap": 1,
+    "Face2Face": 2,
+    "NeuralTextures": 3,
 }
 
 
-def infer_video_id(image_path: Path) -> str:
-    """Infer video ID from frame path.
-
-    Priority:
-    1. Parent folder name if frames are grouped per video
-    2. Filename prefix before '_frame_'
-    3. File stem
-    """
-    stem = image_path.stem
-    if "_frame_" in stem:
-        return stem.split("_frame_")[0]
-    if image_path.parent.name not in CLASS_TO_INFO:
-        return image_path.parent.name
-    return stem
+def infer_video_id(path: Path) -> str:
+    """Infer video id from image filename."""
+    stem = path.stem
+    return stem.split("_frame")[0].split("_")[0]
 
 
-def collect_rows(data_root: Path) -> pd.DataFrame:
-    rows: List[Dict] = []
-    for class_name, info in CLASS_TO_INFO.items():
-        class_dir = data_root / class_name
-        if not class_dir.exists():
-            print(f"[WARN] class directory not found: {class_dir}")
+def collect_rows(data_root: Path) -> List[dict]:
+    rows: List[dict] = []
+
+    for class_dir in sorted(data_root.iterdir()):
+        if not class_dir.is_dir():
             continue
-        for img_path in iter_images(class_dir):
-            rows.append({
-                "image_path": str(img_path),
-                "video_id": infer_video_id(img_path),
-                "label_rf": info["label_rf"],
-                "label_method": info["label_method"],
-                "method_name": class_name,
-            })
+
+        class_name = class_dir.name
+
+        if class_name == "Real":
+            label_rf = 0
+            label_method = -1
+        elif class_name in METHOD_MAP:
+            label_rf = 1
+            label_method = METHOD_MAP[class_name]
+        else:
+            continue
+
+        for image_path in sorted(class_dir.rglob("*")):
+            if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+
+            rows.append(
+                {
+                    "image_path": str(image_path),
+                    "class_name": class_name,
+                    "video_id": infer_video_id(image_path),
+                    "label_rf": label_rf,
+                    "label_method": label_method,
+                }
+            )
+
     if not rows:
-        raise RuntimeError(f"No images found under {data_root}")
-    return pd.DataFrame(rows)
+        raise RuntimeError(f"No image files found under {data_root}")
+
+    return rows
 
 
-def split_by_video(df: pd.DataFrame, val_ratio: float, test_ratio: float, seed: int) -> pd.DataFrame:
-    video_df = df[["video_id", "label_rf", "label_method", "method_name"]].drop_duplicates("video_id")
-    stratify_col = video_df["method_name"] if video_df["method_name"].value_counts().min() >= 2 else None
+def split_dataframe(
+    df: pd.DataFrame,
+    val_ratio: float,
+    test_ratio: float,
+    seed: int,
+    split_by: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    rng = random.Random(seed)
 
-    train_video, temp_video = train_test_split(
-        video_df,
-        test_size=val_ratio + test_ratio,
-        random_state=seed,
-        stratify=stratify_col,
-    )
-    relative_test_ratio = test_ratio / (val_ratio + test_ratio)
-    stratify_temp = temp_video["method_name"] if temp_video["method_name"].value_counts().min() >= 2 else None
-    val_video, test_video = train_test_split(
-        temp_video,
-        test_size=relative_test_ratio,
-        random_state=seed,
-        stratify=stratify_temp,
-    )
+    if split_by == "video_id":
+        keys = sorted(df["video_id"].unique().tolist())
+        rng.shuffle(keys)
 
-    split_map = {vid: "train" for vid in train_video["video_id"]}
-    split_map.update({vid: "val" for vid in val_video["video_id"]})
-    split_map.update({vid: "test" for vid in test_video["video_id"]})
+        n_total = len(keys)
+        n_test = int(n_total * test_ratio)
+        n_val = int(n_total * val_ratio)
 
-    df = df.copy()
-    df["split"] = df["video_id"].map(split_map)
-    return df
+        test_keys = set(keys[:n_test])
+        val_keys = set(keys[n_test : n_test + n_val])
 
+        test_df = df[df["video_id"].isin(test_keys)]
+        val_df = df[df["video_id"].isin(val_keys)]
+        train_df = df[~df["video_id"].isin(test_keys | val_keys)]
+    else:
+        indices = list(df.index)
+        rng.shuffle(indices)
 
-def split_by_frame(df: pd.DataFrame, val_ratio: float, test_ratio: float, seed: int) -> pd.DataFrame:
-    stratify = df["method_name"] if df["method_name"].value_counts().min() >= 2 else None
-    train_df, temp_df = train_test_split(df, test_size=val_ratio + test_ratio, random_state=seed, stratify=stratify)
-    relative_test_ratio = test_ratio / (val_ratio + test_ratio)
-    stratify_temp = temp_df["method_name"] if temp_df["method_name"].value_counts().min() >= 2 else None
-    val_df, test_df = train_test_split(temp_df, test_size=relative_test_ratio, random_state=seed, stratify=stratify_temp)
-    train_df = train_df.assign(split="train")
-    val_df = val_df.assign(split="val")
-    test_df = test_df.assign(split="test")
-    return pd.concat([train_df, val_df, test_df], ignore_index=True)
+        n_total = len(indices)
+        n_test = int(n_total * test_ratio)
+        n_val = int(n_total * val_ratio)
+
+        test_idx = set(indices[:n_test])
+        val_idx = set(indices[n_test : n_test + n_val])
+
+        test_df = df.loc[list(test_idx)]
+        val_df = df.loc[list(val_idx)]
+        train_df = df.drop(index=list(test_idx | val_idx))
+
+    return train_df.reset_index(drop=True), val_df.reset_index(drop=True), test_df.reset_index(drop=True)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build train/val/test manifests from class folders.")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=True)
-    parser.add_argument("--output_dir", type=str, default="data/manifests")
+    parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--val_ratio", type=float, default=0.15)
     parser.add_argument("--test_ratio", type=float, default=0.15)
-    parser.add_argument("--split_by", type=str, choices=["video_id", "frame"], default="video_id")
+    parser.add_argument("--split_by", type=str, choices=["video_id", "image"], default="video_id")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    set_seed(args.seed)
     data_root = Path(args.data_root)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    df = collect_rows(data_root)
-    if args.split_by == "video_id":
-        df = split_by_video(df, args.val_ratio, args.test_ratio, args.seed)
-    else:
-        df = split_by_frame(df, args.val_ratio, args.test_ratio, args.seed)
+    rows = collect_rows(data_root)
+    df = pd.DataFrame(rows)
 
-    for split in ["train", "val", "test"]:
-        split_df = df[df["split"] == split].reset_index(drop=True)
-        split_df.to_csv(output_dir / f"{split}.csv", index=False)
-        print(f"[{split}] {len(split_df):,} frames / {split_df['video_id'].nunique():,} videos -> {output_dir / f'{split}.csv'}")
+    train_df, val_df, test_df = split_dataframe(
+        df=df,
+        val_ratio=args.val_ratio,
+        test_ratio=args.test_ratio,
+        seed=args.seed,
+        split_by=args.split_by,
+    )
 
-    df.to_csv(output_dir / "all.csv", index=False)
-    print(f"[all] {len(df):,} frames -> {output_dir / 'all.csv'}")
+    train_df.to_csv(output_dir / "train.csv", index=False)
+    val_df.to_csv(output_dir / "val.csv", index=False)
+    test_df.to_csv(output_dir / "test.csv", index=False)
+
+    label_map = {
+        "real": 0,
+        "fake": 1,
+        "methods": METHOD_MAP,
+    }
+
+    with (output_dir / "label_map.json").open("w", encoding="utf-8") as f:
+        json.dump(label_map, f, indent=2, ensure_ascii=False)
+
+    print("Manifest files created:")
+    print("train:", len(train_df))
+    print("val:", len(val_df))
+    print("test:", len(test_df))
 
 
 if __name__ == "__main__":

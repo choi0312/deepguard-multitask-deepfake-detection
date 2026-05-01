@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
 python -m src.training.train --config configs/default.yaml

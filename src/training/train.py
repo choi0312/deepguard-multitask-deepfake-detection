@@ -8,7 +8,7 @@ from typing import Dict
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -53,7 +53,7 @@ def run_epoch(
         with torch.set_grad_enabled(is_train):
             use_amp = scaler is not None and device.type == "cuda"
 
-            with autocast(enabled=use_amp):
+            with autocast(device_type=device.type, enabled=use_amp):
                 outputs = model(images)
                 loss_rf = bce_loss(outputs["rf_logit"], y_rf)
 
@@ -160,7 +160,7 @@ def main() -> None:
     ce_loss = nn.CrossEntropyLoss()
 
     use_amp = bool(cfg["training"].get("use_amp", True)) and device.type == "cuda"
-    scaler = GradScaler(enabled=use_amp)
+    scaler = GradScaler("cuda", enabled=use_amp) if device.type == "cuda" else None
 
     best_val_f1 = -1.0
     patience = int(cfg["training"].get("patience", 5))

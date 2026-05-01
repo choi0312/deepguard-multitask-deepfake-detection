@@ -10,7 +10,7 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data
+# Dataset
 data/raw/
 data/processed/
 data/processed_frames/
@@ -20,7 +20,7 @@ data/FaceForensics++/
 *.mov
 *.mkv
 
-# Model checkpoints
+# Model artifacts
 checkpoints/
 outputs/
 *.pt

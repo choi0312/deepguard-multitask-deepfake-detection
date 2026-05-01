@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/raw/
+data/processed/
+data/processed_frames/
+data/FaceForensics++/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Model checkpoints
+checkpoints/
+outputs/
+*.pt
+*.pth
+*.ckpt
+
+# Logs
+logs/
+runs/
+wandb/
+lightning_logs/
+*.log
+events.out.tfevents.*
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
+
+# Secrets
+.env
+*.key
+token.txt
+github_token.txt
